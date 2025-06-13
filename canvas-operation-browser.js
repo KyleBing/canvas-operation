@@ -319,12 +319,12 @@ class CanvasOperation {
             infos.length * lineHeight + paddingTB * 2,
             panelRadius
         )
-        ctx.strokeStyle = 'black'
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)'
         ctx.fillStyle = 'white'
         ctx.shadowColor = 'rgba(0, 0, 0, 0.2)'
-        ctx.shadowBlur = 5
-        ctx.shadowOffsetX = 3
-        ctx.shadowOffsetY = 4
+        ctx.shadowBlur = 15
+        ctx.shadowOffsetX = 10
+        ctx.shadowOffsetY = 13
         ctx.stroke()
         ctx.fill()
         ctx.closePath()
@@ -349,7 +349,7 @@ class CanvasOperation {
             ctx.textAlign = 'right'
             ctx.font = `${fontSize}px JetBrains Mono, 微软雅黑, sans-serif`
             ctx.fillText(
-                info.price || '',
+                info.price || '-',
                 panelX + panelWidth - paddingLR + offsetX,
                 panelY + lineHeight * index + 20 + paddingTB + offsetY
             )
