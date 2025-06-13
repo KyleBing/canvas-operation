@@ -38,6 +38,13 @@ class CanvasOperation {
 
         this.bgColor = 'white'
 
+        // 时间滚动相关属性
+        this.currentDate = new Date()
+        this.timeScrollHeight = 60 * this.pixelRatio
+        this.timeScrollY = 0
+        this.verticalTimeScrollWidth = 100 * this.pixelRatio
+        this.verticalTimeScrollX = 0
+
         this.frame = {
             width : 1920 * this.pixelRatio,
             height: 1080 * this.pixelRatio,
@@ -68,6 +75,32 @@ class CanvasOperation {
             // 窗口大小改变时重新计算起始位置
             this.calculateStartPositions()
         }
+
+        // 监听鼠标滚轮事件
+        document.addEventListener('wheel', (event) => {
+            event.preventDefault()
+            
+            // 根据滚轮方向调整日期
+            const deltaY = event.deltaY
+            const dayChange = Math.sign(deltaY) // 1 或 -1
+            
+            this.currentDate.setDate(this.currentDate.getDate() + dayChange)
+            
+            // 重绘画布
+            this.drawSections(this.ctx, this.attaches)
+        }, { passive: false })
+
+        // 监听鼠标点击事件
+        document.addEventListener('click', (event) => {
+            const canvas = document.getElementById('canvasLayer')
+            const rect = canvas.getBoundingClientRect()
+            
+            const clickX = (event.clientX - rect.left) * this.pixelRatio
+            const clickY = (event.clientY - rect.top) * this.pixelRatio
+            
+            // 检查是否点击在垂直时间滚动条内
+            this.handleVerticalTimeScrollClick(clickX, clickY)
+        })
 
         document.documentElement.addEventListener('mousemove', event => {
             // 获取画布位置
@@ -154,6 +187,12 @@ class CanvasOperation {
         
         // 绘制坐标轴和网格
         // this.drawCoordinateAxes(ctx)
+        
+        // 绘制水平时间滚动条
+        this.drawTimeScroll(ctx)
+        
+        // 绘制垂直时间滚动条
+        this.drawVerticalTimeScroll(ctx)
         
         ctx.restore()
     }
@@ -358,6 +397,129 @@ class CanvasOperation {
         ctx.restore()
     }
 
+    // 绘制时间滚动条
+    drawTimeScroll(ctx) {
+        const scrollHeight = this.timeScrollHeight
+        const scrollY = this.timeScrollY
+        const padding = 20 * this.pixelRatio
+        
+        ctx.save()
+        
+        // 绘制时间滚动条背景
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
+        ctx.fillRect(0, scrollY, this.frame.width, scrollHeight)
+        
+        // 绘制时间滚动条边框
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(0, scrollY, this.frame.width, scrollHeight)
+        
+        // 绘制日期列表
+        this.drawDayList(ctx, scrollY, scrollHeight, padding)
+        
+        // 绘制滚轮提示
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'
+        ctx.font = `${14 * this.pixelRatio}px 微软雅黑, sans-serif`
+        ctx.textAlign = 'right'
+        ctx.textBaseline = 'bottom'
+        ctx.fillText('滚轮切换日期', this.frame.width - padding, scrollY + scrollHeight - 5 * this.pixelRatio)
+        
+        ctx.restore()
+    }
+    
+    // 绘制日期列表
+    drawDayList(ctx, scrollY, scrollHeight, padding) {
+        const dayWidth = 80 * this.pixelRatio
+        const dayHeight = scrollHeight - 10 * this.pixelRatio
+        const dayGap = 5 * this.pixelRatio
+        const startX = padding + this.verticalTimeScrollWidth
+        const startY = scrollY + 5 * this.pixelRatio
+        
+        // 计算显示多少天（当前日期前后各几天）
+        const availableWidth = this.frame.width - padding * 2 - this.verticalTimeScrollWidth
+        const totalDays = Math.floor(availableWidth / (dayWidth + dayGap))
+        const centerIndex = Math.floor(totalDays / 2)
+        
+        for (let i = 0; i < totalDays; i++) {
+            const dayOffset = i - centerIndex
+            const displayDate = new Date(this.currentDate)
+            displayDate.setDate(displayDate.getDate() + dayOffset)
+            
+            const x = startX + i * (dayWidth + dayGap)
+            const y = startY
+            
+            // 判断是否为当前选中日期
+            const isCurrentDay = dayOffset === 0
+            // 判断是否为周末
+            const isWeekend = displayDate.getDay() === 0 || displayDate.getDay() === 6
+            
+            ctx.save()
+            
+            // 绘制日期背景
+            ctx.beginPath()
+            ctx.roundRect(x, y, dayWidth, dayHeight, 8 * this.pixelRatio)
+            ctx.closePath()
+            
+            if (isCurrentDay) {
+                ctx.fillStyle = 'rgba(0, 120, 255, 0.2)'
+                ctx.strokeStyle = 'rgba(0, 120, 255, 0.8)'
+                ctx.lineWidth = 2
+            } else {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'
+                ctx.lineWidth = 1
+            }
+            
+            ctx.fill()
+            ctx.stroke()
+            
+            // 绘制日期文本
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'top'
+            
+            // 月份
+            const monthText = `${displayDate.getMonth() + 1}月`
+            ctx.font = `${10 * this.pixelRatio}px 微软雅黑, sans-serif`
+            if (isWeekend) {
+                ctx.fillStyle = isCurrentDay ? 'rgba(255, 0, 0, 0.6)' : 'rgba(255, 0, 0, 0.7)'
+            } else {
+                ctx.fillStyle = isCurrentDay ? 'rgba(0, 120, 255, 0.7)' : 'gray'
+            }
+            ctx.fillText(monthText, x + dayWidth / 2, y + 5 * this.pixelRatio)
+            
+            // 日期数字
+            const dayNum = displayDate.getDate()
+            if (isWeekend) {
+                ctx.font = `bold ${18 * this.pixelRatio}px 微软雅黑, sans-serif`
+                ctx.fillStyle = isCurrentDay ? 'rgba(255, 0, 0, 0.8)' : 'red'
+            } else {
+                ctx.font = `${16 * this.pixelRatio}px 微软雅黑, sans-serif`
+                ctx.fillStyle = isCurrentDay ? 'rgba(0, 120, 255, 1)' : 'black'
+            }
+            
+            ctx.fillText(dayNum.toString(), x + dayWidth / 2, y + 18 * this.pixelRatio)
+            
+            // 星期文本
+            const weekText = this.getShortWeekText(displayDate)
+            ctx.font = `${12 * this.pixelRatio}px 微软雅黑, sans-serif`
+            if (isWeekend) {
+                ctx.fillStyle = isCurrentDay ? 'rgba(255, 0, 0, 0.7)' : 'rgba(255, 0, 0, 0.8)'
+            } else {
+                ctx.fillStyle = isCurrentDay ? 'rgba(0, 120, 255, 0.8)' : 'gray'
+            }
+            
+            ctx.fillText(weekText, x + dayWidth / 2, y + dayHeight - 15 * this.pixelRatio)
+            
+            ctx.restore()
+        }
+    }
+    
+    // 获取简短星期文本
+    getShortWeekText(date) {
+        const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+        return weekdays[date.getDay()]
+    }
+
     // 计算起始位置
     calculateStartPositions() {
         const colCount = this.columnCount
@@ -365,8 +527,10 @@ class CanvasOperation {
         const totalWidth = colCount * (this.sectionWidth + this.sectionGap) - this.sectionGap
         const totalHeight = rowCount * (this.sectionHeight + this.sectionGap) - this.sectionGap
         
-        this.startX = (this.frame.width - totalWidth) / 2
-        this.startY = (this.frame.height - totalHeight) * 1 / 3
+        // 调整X位置以避开垂直时间滚动条
+        this.startX = ((this.frame.width - this.verticalTimeScrollWidth - totalWidth) / 2) + this.verticalTimeScrollWidth
+        // 调整Y位置以避开水平时间滚动条
+        this.startY = ((this.frame.height - this.timeScrollHeight - totalHeight) * 1 / 3) + this.timeScrollHeight
     }
 
     // 动画开始
@@ -390,6 +554,131 @@ class CanvasOperation {
         let canvasLayer = document.getElementById('canvasLayer')
         canvasLayer.remove()
         console.log('动画已停止')
+    }
+
+    // 绘制垂直时间滚动条
+    drawVerticalTimeScroll(ctx) {
+        const scrollWidth = this.verticalTimeScrollWidth
+        const scrollX = this.verticalTimeScrollX
+        const padding = 10 * this.pixelRatio
+        
+        ctx.save()
+        
+        // 绘制垂直时间滚动条背景
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
+        ctx.fillRect(scrollX, 0, scrollWidth, this.frame.height)
+        
+        // 绘制垂直时间滚动条边框
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)'
+        ctx.lineWidth = 1
+        ctx.strokeRect(scrollX, 0, scrollWidth, this.frame.height)
+        
+        // 绘制垂直日期列表
+        this.drawVerticalDayList(ctx, scrollX, scrollWidth, padding)
+        
+        ctx.restore()
+    }
+    
+    // 处理垂直时间滚动条点击
+    handleVerticalTimeScrollClick(clickX, clickY) {
+        const scrollWidth = this.verticalTimeScrollWidth
+        const scrollX = this.verticalTimeScrollX
+        const padding = 10 * this.pixelRatio
+        
+        // 检查是否在垂直滚动条范围内
+        if (clickX >= scrollX && clickX <= scrollX + scrollWidth) {
+            const dayHeight = 40 * this.pixelRatio
+            const dayGap = 2 * this.pixelRatio
+            const startY = this.timeScrollHeight + padding
+            
+            // 计算显示多少天
+            const totalDays = Math.floor((this.frame.height - this.timeScrollHeight - padding * 2) / (dayHeight + dayGap))
+            const centerIndex = Math.floor(totalDays / 2)
+            
+            // 检查点击了哪一天
+            for (let i = 0; i < totalDays; i++) {
+                const y = startY + i * (dayHeight + dayGap)
+                
+                if (clickY >= y && clickY <= y + dayHeight) {
+                    const dayOffset = i - centerIndex
+                    const newDate = new Date(this.currentDate)
+                    newDate.setDate(newDate.getDate() + dayOffset)
+                    this.currentDate = newDate
+                    
+                    // 重绘画布
+                    this.drawSections(this.ctx, this.attaches)
+                    break
+                }
+            }
+        }
+    }
+
+    // 绘制垂直日期列表
+    drawVerticalDayList(ctx, scrollX, scrollWidth, padding) {
+        const dayHeight = 40 * this.pixelRatio
+        const dayGap = 2 * this.pixelRatio
+        const dayWidth = scrollWidth - padding * 2
+        const startX = scrollX + padding
+        const startY = this.timeScrollHeight + padding
+        
+        // 计算显示多少天
+        const totalDays = Math.floor((this.frame.height - this.timeScrollHeight - padding * 2) / (dayHeight + dayGap))
+        const centerIndex = Math.floor(totalDays / 2)
+        
+        for (let i = 0; i < totalDays; i++) {
+            const dayOffset = i - centerIndex
+            const displayDate = new Date(this.currentDate)
+            displayDate.setDate(displayDate.getDate() + dayOffset)
+            
+            const x = startX
+            const y = startY + i * (dayHeight + dayGap)
+            
+            // 判断是否为当前选中日期
+            const isCurrentDay = dayOffset === 0
+            // 判断是否为周末
+            const isWeekend = displayDate.getDay() === 0 || displayDate.getDay() === 6
+            
+            ctx.save()
+            
+            // 绘制日期背景
+            ctx.beginPath()
+            ctx.roundRect(x, y, dayWidth, dayHeight, 4 * this.pixelRatio)
+            ctx.closePath()
+            
+            if (isCurrentDay) {
+                ctx.fillStyle = 'rgba(0, 120, 255, 0.2)'
+                ctx.strokeStyle = 'rgba(0, 120, 255, 0.8)'
+                ctx.lineWidth = 2
+            } else {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)'
+                ctx.lineWidth = 1
+            }
+            
+            ctx.fill()
+            ctx.stroke()
+            
+            // 在一行中显示所有信息：月/日 星期
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            
+            // 月份和日期
+            const monthDay = `${displayDate.getMonth() + 1}/${displayDate.getDate()}`
+            const weekText = this.getShortWeekText(displayDate)
+            const fullText = `${monthDay} ${weekText}`
+            
+            if (isWeekend) {
+                ctx.font = `bold ${12 * this.pixelRatio}px 微软雅黑, sans-serif`
+                ctx.fillStyle = isCurrentDay ? 'rgba(255, 0, 0, 0.8)' : 'red'
+            } else {
+                ctx.font = `${11 * this.pixelRatio}px 微软雅黑, sans-serif`
+                ctx.fillStyle = isCurrentDay ? 'rgba(0, 120, 255, 1)' : 'black'
+            }
+            
+            ctx.fillText(fullText, x + dayWidth / 2, y + dayHeight / 2)
+            
+            ctx.restore()
+        }
     }
 }
 
